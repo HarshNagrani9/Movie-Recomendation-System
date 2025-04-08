@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ movie.title }} - Movie Details</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Movie Details</h1>
+            <a href="/" class="back-btn">Back to Home</a>
+        </header>
+        
+        <main>
+            <section class="movie-details">
+                <h2>{{ movie.title }}</h2>
+                
+                <div class="movie-info">
+                    <div class="movie-genres">
+                        <h3>Genres:</h3>
+                        <div class="genre-tags">
+                            {% for genre in movie.genres.split('|') %}
+                                <span class="genre-tag">{{ genre }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="movie-id">
+                        <p>Movie ID: {{ movie.movieId }}</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+        <footer>
+            <p>Movie Recommendation System &copy; 2025</p>
+        </footer>
+    </div>
+</body>
+</html>

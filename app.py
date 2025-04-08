@@ -1,0 +1,186 @@
+# from flask import Flask, render_template, request, jsonify
+# import pandas as pd
+# from recommendation import get_recommendations, get_top_movies_by_genre
+
+# app = Flask(__name__)
+
+# # Load the dataset
+# movies_df = pd.read_csv('data/movies.csv')
+
+# # Extract unique genres for filter dropdown
+# all_genres = set()
+# for genres in movies_df['genres'].str.split('|'):
+#     if isinstance(genres, list):
+#         all_genres.update(genres)
+# all_genres = sorted([genre for genre in all_genres if genre != '(no genres listed)'])
+
+# @app.route('/')
+# def index():
+#     return render_template('index.html', genres=all_genres)
+
+# @app.route('/movie/<int:movie_id>')
+# def movie_details(movie_id):
+#     movie = movies_df[movies_df['movieId'] == movie_id].iloc[0]
+#     return render_template('movie_details.html', movie=movie)
+
+# @app.route('/recommend', methods=['POST'])
+# def recommend():
+#     selected_movie_ids = request.json.get('selectedMovies', [])
+#     num_recommendations = request.json.get('numRecommendations', 10)
+    
+#     if not selected_movie_ids:
+#         return jsonify({'error': 'No movies selected'})
+    
+#     recommendations = get_recommendations(movies_df, selected_movie_ids, num_recommendations)
+#     return jsonify(recommendations.to_dict(orient='records'))
+
+# @app.route('/filter_movies', methods=['POST'])
+# def filter_movies():
+#     genre = request.json.get('genre', '')
+#     top_n = request.json.get('limit', 50)
+    
+#     filtered_movies = get_top_movies_by_genre(movies_df, genre, top_n)
+#     return jsonify(filtered_movies.to_dict(orient='records'))
+
+# @app.route('/search_movies', methods=['POST'])
+# def search_movies():
+#     search_term = request.json.get('searchTerm', '').lower()
+    
+#     if not search_term:
+#         return jsonify([])
+    
+#     # Search for movies containing the search term
+#     search_results = movies_df[movies_df['title'].str.lower().str.contains(search_term)]
+    
+#     # Return top 20 results
+#     return jsonify(search_results.head(20).to_dict(orient='records'))
+
+# if __name__ == '__main__':
+#     app.run(debug=True)
+
+
+
+from flask import Flask, render_template, request, jsonify, make_response
+from flask_cors import CORS
+import pandas as pd
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+# Enable CORS for all routes
+CORS(app)
+app.config['SECRET_KEY'] = 'your-secret-key-here'
+
+# Load the dataset
+try:
+    movies_df = pd.read_csv('data/movies.csv')
+    logger.info(f"Successfully loaded {len(movies_df)} movies from CSV")
+except Exception as e:
+    logger.error(f"Error loading movies.csv: {str(e)}")
+    movies_df = pd.DataFrame(columns=['movieId', 'title', 'genres'])
+
+# Extract unique genres for filter dropdown
+all_genres = set()
+try:
+    for genres in movies_df['genres'].dropna().str.split('|'):
+        if isinstance(genres, list):
+            all_genres.update(genres)
+    all_genres = sorted([genre for genre in all_genres if genre != '(no genres listed)'])
+except Exception as e:
+    logger.error(f"Error extracting genres: {str(e)}")
+    all_genres = []
+
+@app.route('/')
+def index():
+    return render_template('index.html', genres=all_genres)
+
+@app.route('/movie/<int:movie_id>')
+def movie_details(movie_id):
+    try:
+        movie = movies_df[movies_df['movieId'] == movie_id].iloc[0]
+        return render_template('movie_details.html', movie=movie)
+    except Exception as e:
+        logger.error(f"Error getting movie details for ID {movie_id}: {str(e)}")
+        return "Movie not found", 404
+
+@app.route('/recommend', methods=['POST'])
+def recommend():
+    try:
+        data = request.get_json()
+        if data is None:
+            logger.error("No JSON data received in request")
+            return jsonify({'error': 'No data provided'}), 400
+            
+        selected_movie_ids = data.get('selectedMovies', [])
+        num_recommendations = data.get('numRecommendations', 10)
+        
+        logger.info(f"Recommendation request: {len(selected_movie_ids)} movies, {num_recommendations} recommendations")
+        
+        if not selected_movie_ids:
+            return jsonify({'error': 'No movies selected'}), 400
+        
+        # Basic recommendation logic (simplified for this version)
+        # Get random movies as recommendations
+        recommendations = movies_df.sample(min(num_recommendations, len(movies_df)))
+        
+        result = recommendations[['movieId', 'title', 'genres']].to_dict(orient='records')
+        logger.info(f"Returning {len(result)} recommendations")
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Error in recommendation endpoint: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/filter_movies', methods=['POST'])
+def filter_movies():
+    try:
+        data = request.get_json()
+        if data is None:
+            return jsonify([]), 200
+            
+        genre = data.get('genre', '')
+        top_n = data.get('limit', 50)
+        
+        if not genre:
+            # If no genre is selected, return some random movies
+            filtered_movies = movies_df.sample(min(top_n, len(movies_df)))
+        else:
+            # Filter movies by genre
+            filtered_movies = movies_df[movies_df['genres'].str.contains(genre, na=False)]
+            
+        result = filtered_movies[['movieId', 'title', 'genres']].head(top_n).to_dict(orient='records')
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Error in filter_movies endpoint: {str(e)}")
+        return jsonify([]), 500
+
+@app.route('/search_movies', methods=['POST'])
+def search_movies():
+    try:
+        data = request.get_json()
+        if data is None:
+            return jsonify([]), 200
+            
+        search_term = data.get('searchTerm', '').lower()
+        
+        if not search_term:
+            return jsonify([])
+        
+        # Search for movies containing the search term
+        search_results = movies_df[movies_df['title'].str.lower().str.contains(search_term, na=False)]
+        
+        # Return top 20 results
+        result = search_results[['movieId', 'title', 'genres']].head(20).to_dict(orient='records')
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Error in search_movies endpoint: {str(e)}")
+        return jsonify([]), 500
+
+if __name__ == '__main__':
+    # Make sure to run on 0.0.0.0 to allow external connections
+    app.run(debug=True, host='0.0.0.0', port=5001)
